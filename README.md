@@ -6,7 +6,7 @@ A minimal desktop translator built with PySide6. Type source text on the left, p
 
 ## Setup
 
-Requirements: Python 3.12+, `uv`, and an `OPENAI_API_KEY` in your environment.
+Requirements: Python 3.12+ and `uv`.
 
 ### Run with uv
 
