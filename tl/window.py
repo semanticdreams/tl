@@ -294,6 +294,19 @@ class MainWindow(QMainWindow):
             for existing in (self._latest_job, self._pending_job, self._active_job)
         )
 
+    def _current_job_snapshot(self) -> Optional[TranslateJob]:
+        if not self.current_backend:
+            return None
+        text = (self.src_text.toPlainText() or "").strip()
+        if not text:
+            return None
+        return TranslateJob(
+            backend=self.current_backend,
+            source_lang=self.src_lang.current_lang_code(),
+            target_lang=self.tgt_lang.current_lang_code(),
+            text=text,
+        )
+
     def _maybe_start_translation(self):
         if not self._ui_enabled or not self.current_backend:
             return
@@ -416,6 +429,10 @@ class MainWindow(QMainWindow):
             self.tgt_lang.set_lang_code(rec.target_lang)
             self.src_text.setPlainText(rec.source_text)
             self.tgt_text.setPlainText(rec.target_text)
+        snap = self._current_job_snapshot()
+        if snap:
+            self._latest_job = snap
+            self._pending_job = None
 
     def _history_scroll_changed(self, value: int):
         sb = self.history_view.verticalScrollBar()
