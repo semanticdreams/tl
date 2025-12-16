@@ -1,4 +1,4 @@
-from typing import Dict
+from typing import Dict, Optional
 
 # OpenAI SDK (official)
 from openai import OpenAI
@@ -17,10 +17,13 @@ class OpenAIBackend(TranslationBackend):
     name = "OpenAI"
 
     def __init__(self):
-        # Uses OPENAI_API_KEY env var by default
-        self.client = OpenAI()
+        self.client: Optional[OpenAI] = None
+        self._api_key: Optional[str] = None
 
     def translate(self, source_lang: str, target_lang: str, text: str) -> str:
+        if not self.client:
+            raise RuntimeError("OpenAI API key not configured.")
+
         source_desc = "auto-detect" if source_lang == "auto" else f"{source_lang}"
         prompt = (
             "You are a high-accuracy translation engine.\n"
@@ -39,6 +42,13 @@ class OpenAIBackend(TranslationBackend):
         )
         out = (getattr(resp, "output_text", None) or "").strip()
         return out
+
+    def set_api_key(self, api_key: str) -> None:
+        self._api_key = api_key
+        self.client = OpenAI(api_key=api_key)
+
+    def has_api_key(self) -> bool:
+        return bool(self._api_key)
 
 
 BACKENDS: Dict[str, TranslationBackend] = {

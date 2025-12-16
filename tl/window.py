@@ -9,6 +9,9 @@ from PySide6.QtCore import Qt, QTimer, QThread, QCoreApplication, QModelIndex
 from PySide6.QtGui import QAction, QIcon, QStandardItem
 from PySide6.QtWidgets import (
     QApplication,
+    QDialog,
+    QDialogButtonBox,
+    QLineEdit,
     QLabel,
     QListView,
     QMainWindow,
@@ -23,6 +26,8 @@ from PySide6.QtWidgets import (
     QWidget,
     QHBoxLayout,
 )
+
+import keyring
 
 from .backends import BACKENDS
 from .constants import APP_NAME, DEBOUNCE_MS, HISTORY_CHUNK, OPENAI_TRANSLATION_MODEL
@@ -47,6 +52,8 @@ class MainWindow(QMainWindow):
         self.store = Persistence(self.base_dir)
 
         self.current_backend = "OpenAI"
+        self._ui_enabled = True
+        self._ui_disabled_reason: Optional[str] = None
         self._suppress_schedule = False
 
         # Translation scheduling/coalescing
@@ -67,6 +74,7 @@ class MainWindow(QMainWindow):
         self._build_ui()
         self._build_tray()
         self._load_settings()
+        self.set_backend(self.current_backend, prompt_if_missing=True, schedule=False)
         self._load_history_initial()
 
         self._update_status()
@@ -215,6 +223,11 @@ class MainWindow(QMainWindow):
         settings = self.store.load_settings()
         self.src_lang.set_lang_code(settings.get("last_source_lang", "auto"))
         self.tgt_lang.set_lang_code(settings.get("last_target_lang", "en"))
+        backend = settings.get("backend", "OpenAI")
+        if backend not in BACKENDS:
+            backend = "OpenAI"
+        self.current_backend = backend
+        self._select_backend_action(backend)
 
     def _save_settings(self):
         settings = {
@@ -269,12 +282,14 @@ class MainWindow(QMainWindow):
             self._suppress_schedule = prev
 
     def schedule_translation(self):
-        if self._suppress_schedule:
+        if self._suppress_schedule or not self._ui_enabled or not self.current_backend:
             return
         self._save_settings()
         self._debounce.start(DEBOUNCE_MS)
 
     def _maybe_start_translation(self):
+        if not self._ui_enabled or not self.current_backend:
+            return
         text = (self.src_text.toPlainText() or "").strip()
         if not text:
             self._latest_job = None
@@ -299,6 +314,8 @@ class MainWindow(QMainWindow):
         self._start_job(job)
 
     def _start_job(self, job: TranslateJob):
+        if not self._ui_enabled or not self.current_backend:
+            return
         self._in_flight = True
         self._pending_job = None
         self._active_job = job
@@ -410,14 +427,109 @@ class MainWindow(QMainWindow):
 
     # Backend selection ---------------------------------------------------
 
-    def set_backend(self, name: str):
-        if name not in BACKENDS:
-            return
-        self.current_backend = name
+    def _select_backend_action(self, name: str) -> None:
         for backend_name, act in self.backend_actions.items():
             if backend_name in BACKENDS:
                 act.setChecked(backend_name == name)
-        self.schedule_translation()
+
+    def _uncheck_backend_action(self, name: str) -> None:
+        act = self.backend_actions.get(name)
+        if act:
+            act.setChecked(False)
+
+    def set_backend(
+        self, name: str, prompt_if_missing: bool = True, schedule: bool = True
+    ):
+        if name not in BACKENDS:
+            return
+        if not self._ensure_backend_ready(name, prompt_if_missing=prompt_if_missing):
+            self._uncheck_backend_action(name)
+            self.current_backend = None
+            self._set_ui_enabled(False, reason="OpenAI API key required.")
+            return
+
+        self.current_backend = name
+        self._select_backend_action(name)
+        self._set_ui_enabled(True)
+
+        if schedule:
+            self.schedule_translation()
+        else:
+            self._save_settings()
+
+    def _ensure_backend_ready(self, name: str, prompt_if_missing: bool = True) -> bool:
+        if name == "OpenAI":
+            return self._configure_openai_api_key(prompt_if_missing=prompt_if_missing)
+        return True
+
+    def _configure_openai_api_key(self, prompt_if_missing: bool = True) -> bool:
+        backend = BACKENDS["OpenAI"]
+        if backend.has_api_key():
+            return True
+
+        stored = keyring.get_password(APP_NAME, "OpenAI")
+        if stored:
+            backend.set_api_key(stored)
+            return True
+
+        if not prompt_if_missing:
+            return False
+
+        key = self._prompt_for_openai_api_key()
+        if key:
+            keyring.set_password(APP_NAME, "OpenAI", key)
+            backend.set_api_key(key)
+            return True
+        return False
+
+    def _prompt_for_openai_api_key(self) -> Optional[str]:
+        dialog = QDialog(self)
+        dialog.setWindowTitle("Connect your OpenAI account")
+
+        layout = QVBoxLayout(dialog)
+        copy = (
+            "Connect your OpenAI account\n"
+            "Your API key stays on your device and is used only for your requests.\n"
+            "You control usage and billing."
+        )
+        lbl = QLabel(copy, dialog)
+        lbl.setWordWrap(True)
+        lbl.setTextFormat(Qt.PlainText)
+        layout.addWidget(lbl)
+
+        link = QLabel(
+            '<a href="https://platform.openai.com/api-keys">https://platform.openai.com/api-keys</a>',
+            dialog,
+        )
+        link.setOpenExternalLinks(True)
+        layout.addWidget(link)
+
+        api_key_input = QLineEdit(dialog)
+        api_key_input.setPlaceholderText("sk-...")
+        api_key_input.setEchoMode(QLineEdit.Password)
+        layout.addWidget(api_key_input)
+
+        buttons = QDialogButtonBox(
+            QDialogButtonBox.Ok | QDialogButtonBox.Cancel, Qt.Horizontal, dialog
+        )
+        layout.addWidget(buttons)
+
+        def accept_if_present():
+            key = api_key_input.text().strip()
+            if key:
+                dialog.done(QDialog.Accepted)
+            else:
+                api_key_input.setFocus()
+
+        buttons.accepted.connect(accept_if_present)
+        buttons.rejected.connect(dialog.reject)
+
+        api_key_input.setFocus()
+
+        result = dialog.exec()
+        if result == QDialog.Accepted:
+            return api_key_input.text().strip()
+        return None
 
     # Swap ---------------------------------------------------------------
 
@@ -468,10 +580,22 @@ class MainWindow(QMainWindow):
 
     # Status -------------------------------------------------------------
 
+    def _set_ui_enabled(self, enabled: bool, reason: Optional[str] = None):
+        self._ui_enabled = enabled
+        self._ui_disabled_reason = None if enabled else (reason or "Backend not configured.")
+        cw = self.centralWidget()
+        if cw is not None:
+            cw.setEnabled(enabled)
+        self._update_status()
+
     def _set_status_text(self, txt: str):
         self.status_label.setText(txt)
 
     def _update_status(self):
+        if not self._ui_enabled:
+            self._set_status_text(self._ui_disabled_reason or "Backend not configured.")
+            self._sync_show_hide_labels()
+            return
         if self._in_flight:
             pending = 1 if self._pending_job is not None else 0
             self._set_status_text(f"Translating… (pending: {pending})")
