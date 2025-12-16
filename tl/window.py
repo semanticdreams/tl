@@ -287,6 +287,13 @@ class MainWindow(QMainWindow):
         self._save_settings()
         self._debounce.start(DEBOUNCE_MS)
 
+    def _is_duplicate_job(self, job: TranslateJob) -> bool:
+        # Skip firing another translation if inputs match the most recent intent.
+        return any(
+            existing is not None and existing == job
+            for existing in (self._latest_job, self._pending_job, self._active_job)
+        )
+
     def _maybe_start_translation(self):
         if not self._ui_enabled or not self.current_backend:
             return
@@ -303,6 +310,10 @@ class MainWindow(QMainWindow):
             target_lang=self.tgt_lang.current_lang_code(),
             text=text,
         )
+
+        if self._is_duplicate_job(job):
+            return
+
         self._latest_job = job
 
         if self._in_flight:
@@ -442,6 +453,7 @@ class MainWindow(QMainWindow):
     ):
         if name not in BACKENDS:
             return
+        previous_backend = self.current_backend
         if not self._ensure_backend_ready(name, prompt_if_missing=prompt_if_missing):
             self._uncheck_backend_action(name)
             self.current_backend = None
@@ -452,7 +464,7 @@ class MainWindow(QMainWindow):
         self._select_backend_action(name)
         self._set_ui_enabled(True)
 
-        if schedule:
+        if schedule and name != previous_backend:
             self.schedule_translation()
         else:
             self._save_settings()
