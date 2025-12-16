@@ -440,7 +440,6 @@ class MainWindow(QMainWindow):
         event.ignore()
         self.hide()
         self._sync_show_hide_labels()
-        self.tray.showMessage(APP_NAME, "Still running in system tray.", self.app_icon, 1500)
 
     def quit_app(self):
         self._save_settings()
