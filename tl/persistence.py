@@ -38,3 +38,13 @@ class Persistence:
             return []
         with open(self.history_path, "r", encoding="utf-8") as f:
             return f.read().splitlines()
+
+    def clear_history(self) -> None:
+        if not os.path.exists(self.history_path):
+            return
+        try:
+            os.remove(self.history_path)
+        except OSError:
+            # If removal fails (e.g., permission issues), fall back to truncation.
+            with open(self.history_path, "w", encoding="utf-8") as f:
+                f.truncate(0)

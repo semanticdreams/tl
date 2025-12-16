@@ -170,7 +170,11 @@ class MainWindow(QMainWindow):
         self.history_view = QListView()
         self.history_view.setModel(self.history_model)
         self.history_view.clicked.connect(self.on_history_clicked)
-        side_layout.addWidget(self.history_view)
+        side_layout.addWidget(self.history_view, 1)
+
+        self.clear_history_btn = QPushButton("Clear History")
+        self.clear_history_btn.clicked.connect(self.clear_history)
+        side_layout.addWidget(self.clear_history_btn)
 
         splitter.addWidget(main_pane)
         splitter.addWidget(sidebar)
@@ -225,6 +229,7 @@ class MainWindow(QMainWindow):
         self._history_loaded = 0
         self.history_model.clear()
         self._load_more_history()
+        self._update_history_controls()
 
     def _load_more_history(self):
         # history.jsonl is oldest->newest (append). UI needs newest->oldest.
@@ -350,6 +355,7 @@ class MainWindow(QMainWindow):
             item.setData(rec, Qt.UserRole)
             self.history_model.insertRow(0, item)
             self._history_loaded += 1  # because we added one visible record at top
+            self._update_history_controls()
 
             self._set_status_text("Idle")
 
@@ -387,6 +393,20 @@ class MainWindow(QMainWindow):
         sb = self.history_view.verticalScrollBar()
         if value >= sb.maximum() - 20:
             self._load_more_history()
+
+    def clear_history(self):
+        if not self._history_lines and self.history_model.rowCount() == 0:
+            return
+
+        self.store.clear_history()
+        self._history_lines = []
+        self._history_loaded = 0
+        self.history_model.clear()
+        self._update_history_controls()
+
+    def _update_history_controls(self):
+        has_history = bool(self._history_lines) or self.history_model.rowCount() > 0
+        self.clear_history_btn.setEnabled(has_history)
 
     # Backend selection ---------------------------------------------------
 
