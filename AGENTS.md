@@ -2,7 +2,7 @@
 
 ## Project Structure & Module Organization
 - Entry point stays `tl/main.py` (exports `main`), while UI/logic is split across modules: `tl/window.py` (MainWindow + UI), `tl/backends.py`, `tl/persistence.py`, `tl/history.py`, `tl/worker.py`, `tl/widgets.py`, `tl/languages.py`, `tl/models.py`, `tl/constants.py`, and `tl/resources.py`; GUI assets live in `tl/assets/` (e.g., `icon.png`). The package exposes an entrypoint `tl.main:main` and installs a `tl` console script.
-- Persistent user data is written at runtime to the Qt `applicationDirPath` (same directory as the binary when packaged), using `settings.json` and `history.jsonl`. No repo-stored state should be committed.
+- Persistent user data is written at runtime to the Qt `AppDataLocation` (via `QStandardPaths.writableLocation`), using `settings.json` and `history.jsonl`. No repo-stored state should be committed.
 - `pyproject.toml` declares dependencies (PySide6, OpenAI SDK) and the script entry. `uv.lock` pins versions for repeatable installs.
 
 ## Build, Test, and Development Commands

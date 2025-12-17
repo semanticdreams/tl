@@ -3,9 +3,10 @@ from __future__ import annotations
 import json
 import time
 from contextlib import contextmanager
+from pathlib import Path
 from typing import Dict, List, Optional
 
-from PySide6.QtCore import Qt, QTimer, QThread, QCoreApplication, QModelIndex
+from PySide6.QtCore import Qt, QTimer, QThread, QModelIndex, QStandardPaths
 from PySide6.QtGui import QAction, QIcon, QStandardItem
 from PySide6.QtWidgets import (
     QApplication,
@@ -48,7 +49,9 @@ class MainWindow(QMainWindow):
         self.app_icon: QIcon = load_icon()
         self.setWindowIcon(self.app_icon)
 
-        self.base_dir = QCoreApplication.applicationDirPath()
+        self.base_dir = Path(
+            QStandardPaths.writableLocation(QStandardPaths.AppDataLocation)
+        )
         self.store = Persistence(self.base_dir)
 
         self.current_backend = "OpenAI"
@@ -641,6 +644,6 @@ class MainWindow(QMainWindow):
             f"{APP_NAME}\n\n"
             "- PySide6 translator UI\n"
             "- Backend: OpenAI (extensible)\n"
-            "- Data stored in applicationDirPath:\n"
+            "- Data stored in AppDataLocation:\n"
             f"  {self.base_dir}\n",
         )
