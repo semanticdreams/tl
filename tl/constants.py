@@ -4,3 +4,4 @@ HISTORY_CHUNK = 50
 
 # Cheapest solid text model for focused tasks like translation.
 OPENAI_TRANSLATION_MODEL = "gpt-4o-mini"
+OPENAI_TTS_MODEL = "gpt-4o-mini-tts"

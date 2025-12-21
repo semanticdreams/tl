@@ -12,6 +12,7 @@ class Persistence:
         self.base_dir.mkdir(parents=True, exist_ok=True)
         self.settings_path = self.base_dir / "settings.json"
         self.history_path = self.base_dir / "history.jsonl"
+        self.cache_path = self.base_dir / "cache.json"
 
     def load_settings(self) -> Dict:
         if not self.settings_path.exists():
@@ -48,3 +49,30 @@ class Persistence:
             # If removal fails (e.g., permission issues), fall back to truncation.
             with self.history_path.open("w", encoding="utf-8") as f:
                 f.truncate(0)
+
+    def load_cache(self) -> Dict:
+        if not self.cache_path.exists():
+            return {"translations": {}, "info": {}, "audio": {}}
+        try:
+            with self.cache_path.open("r", encoding="utf-8") as f:
+                data = json.load(f)
+        except Exception:
+            return {"translations": {}, "info": {}, "audio": {}}
+        if not isinstance(data, dict):
+            return {"translations": {}, "info": {}, "audio": {}}
+        translations = data.get("translations") or {}
+        info = data.get("info") or {}
+        audio = data.get("audio") or {}
+        if (
+            not isinstance(translations, dict)
+            or not isinstance(info, dict)
+            or not isinstance(audio, dict)
+        ):
+            return {"translations": {}, "info": {}, "audio": {}}
+        return {"translations": translations, "info": info, "audio": audio}
+
+    def save_cache(self, cache: Dict) -> None:
+        tmp = self.cache_path.with_suffix(self.cache_path.suffix + ".tmp")
+        with tmp.open("w", encoding="utf-8") as f:
+            json.dump(cache, f, ensure_ascii=False, indent=2)
+        tmp.replace(self.cache_path)
