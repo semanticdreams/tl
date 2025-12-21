@@ -371,7 +371,7 @@ class MainWindow(QMainWindow):
                 return
 
         output_lang = self.tgt_lang.current_lang_code()
-        if self._extra_info_lang == "source":
+        if kind in {"usage", "grammar", "etymology"} and self._extra_info_lang == "source":
             output_lang = self.src_lang.current_lang_code()
             if output_lang == "auto":
                 output_lang = "source language"
