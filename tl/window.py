@@ -15,10 +15,12 @@ from PySide6.QtCore import (
     QBuffer,
     QByteArray,
     QIODevice,
+    QSettings,
+    QEvent,
 )
 from PySide6.QtGui import QAction, QIcon, QStandardItem
 from PySide6.QtMultimedia import QAudioOutput, QMediaPlayer
-from PySide6.QtWidgets import QApplication, QMainWindow, QSystemTrayIcon
+from PySide6.QtWidgets import QApplication, QDialog, QMainWindow, QSystemTrayIcon
 
 import keyring
 
@@ -26,7 +28,7 @@ from .audio import prepend_wav_silence
 from .backends import BACKENDS
 from .cache import TranslationCache
 from .constants import APP_NAME, DEBOUNCE_MS, HISTORY_CHUNK, OPENAI_TRANSLATION_MODEL
-from .dialogs import prompt_for_openai_api_key, show_about
+from .dialogs import prompt_for_openai_api_key, show_about, SettingsDialog
 from .models import TranslateJob, TranslationRecord, InfoJob, AudioJob
 from .persistence import Persistence
 from .resources import load_icon
@@ -42,6 +44,7 @@ class MainWindow(QMainWindow):
         self.app_icon: QIcon = load_icon()
         self.setWindowIcon(self.app_icon)
 
+        self.app_settings = QSettings(APP_NAME, APP_NAME)
         self.base_dir = Path(
             QStandardPaths.writableLocation(QStandardPaths.AppDataLocation)
         )
@@ -54,6 +57,9 @@ class MainWindow(QMainWindow):
         self._suppress_schedule = False
         self._auto_translate = True
         self._extra_info_lang = "target"
+        self._start_minimized = False
+        self._minimize_to_tray = True
+        self._load_app_settings()
 
         # Translation scheduling/coalescing
         self._debounce = QTimer(self)
@@ -103,6 +109,19 @@ class MainWindow(QMainWindow):
 
     # Settings/history ----------------------------------------------------
 
+    def _load_app_settings(self) -> None:
+        self._start_minimized = self.app_settings.value(
+            "ui/start_minimized", False, type=bool
+        )
+        self._minimize_to_tray = self.app_settings.value(
+            "ui/minimize_to_tray", True, type=bool
+        )
+
+    def _save_app_settings(self) -> None:
+        self.app_settings.setValue("ui/start_minimized", self._start_minimized)
+        self.app_settings.setValue("ui/minimize_to_tray", self._minimize_to_tray)
+        self.app_settings.sync()
+
     def _load_settings(self):
         settings = self.store.load_settings()
         self.src_lang.set_lang_code(settings.get("last_source_lang", "auto"))
@@ -126,6 +145,30 @@ class MainWindow(QMainWindow):
             "extra_info_language": self._extra_info_lang,
         }
         self.store.save_settings(settings)
+
+    def show_settings(self) -> None:
+        dialog = SettingsDialog(
+            self,
+            start_minimized=self._start_minimized,
+            minimize_to_tray=self._minimize_to_tray,
+        )
+        if dialog.exec() != QDialog.Accepted:
+            return
+        self._start_minimized = dialog.start_minimized_checkbox.isChecked()
+        self._minimize_to_tray = dialog.minimize_to_tray_checkbox.isChecked()
+        self._save_app_settings()
+        if not self._minimize_to_tray and not self.isVisible():
+            self.showNormal()
+        self._sync_show_hide_labels()
+
+    def apply_startup_visibility(self) -> None:
+        if not self._start_minimized:
+            return
+        if self._minimize_to_tray:
+            self.hide()
+        else:
+            self.showMinimized()
+        self._sync_show_hide_labels()
 
     def _load_history_initial(self):
         self._history_lines = self.store.read_history_lines()
@@ -727,7 +770,7 @@ class MainWindow(QMainWindow):
         if self.isVisible():
             self.hide()
         else:
-            self.show()
+            self.showNormal()
             self.raise_()
             self.activateWindow()
         self._sync_show_hide_labels()
@@ -738,10 +781,24 @@ class MainWindow(QMainWindow):
         self.tray_act_show_hide.setText("Hide" if visible else "Show")
 
     def closeEvent(self, event):
-        # Hide to tray instead of quitting.
-        event.ignore()
-        self.hide()
-        self._sync_show_hide_labels()
+        if self._minimize_to_tray:
+            event.ignore()
+            self.hide()
+            self._sync_show_hide_labels()
+            return
+        event.accept()
+        self.quit_app()
+
+    def changeEvent(self, event):
+        if event.type() == QEvent.WindowStateChange:
+            if self._minimize_to_tray and self.isMinimized():
+                QTimer.singleShot(0, self._hide_after_minimize)
+        super().changeEvent(event)
+
+    def _hide_after_minimize(self) -> None:
+        if self._minimize_to_tray and self.isMinimized():
+            self.hide()
+            self._sync_show_hide_labels()
 
     def quit_app(self):
         self._save_settings()

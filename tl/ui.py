@@ -40,6 +40,11 @@ def build_main_ui(window: QMainWindow) -> None:
     window.act_show_hide.triggered.connect(window.toggle_visible)
     file_menu.addAction(window.act_show_hide)
 
+    act_settings = QAction("Settings...", window)
+    act_settings.setShortcut("Ctrl+,")
+    act_settings.triggered.connect(window.show_settings)
+    file_menu.addAction(act_settings)
+
     file_menu.addSeparator()
     act_quit = QAction("Quit", window)
     act_quit.setShortcut("Ctrl+Q")

@@ -5,6 +5,7 @@ from typing import Optional
 
 from PySide6.QtCore import Qt
 from PySide6.QtWidgets import (
+    QCheckBox,
     QDialog,
     QDialogButtonBox,
     QLabel,
@@ -15,6 +16,31 @@ from PySide6.QtWidgets import (
 )
 
 from .constants import APP_NAME
+
+
+class SettingsDialog(QDialog):
+    def __init__(
+        self, parent: QWidget, start_minimized: bool, minimize_to_tray: bool
+    ) -> None:
+        super().__init__(parent)
+        self.setWindowTitle("Settings")
+
+        layout = QVBoxLayout(self)
+
+        self.start_minimized_checkbox = QCheckBox("Start minimized", self)
+        self.start_minimized_checkbox.setChecked(start_minimized)
+        layout.addWidget(self.start_minimized_checkbox)
+
+        self.minimize_to_tray_checkbox = QCheckBox("Minimize to tray", self)
+        self.minimize_to_tray_checkbox.setChecked(minimize_to_tray)
+        layout.addWidget(self.minimize_to_tray_checkbox)
+
+        buttons = QDialogButtonBox(
+            QDialogButtonBox.Ok | QDialogButtonBox.Cancel, Qt.Horizontal, self
+        )
+        layout.addWidget(buttons)
+        buttons.accepted.connect(self.accept)
+        buttons.rejected.connect(self.reject)
 
 
 def prompt_for_openai_api_key(parent: QWidget) -> Optional[str]:
