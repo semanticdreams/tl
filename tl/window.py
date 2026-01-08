@@ -170,6 +170,12 @@ class MainWindow(QMainWindow):
             self.showMinimized()
         self._sync_show_hide_labels()
 
+    def should_start_minimized(self) -> bool:
+        return self._start_minimized
+
+    def should_start_hidden_to_tray(self) -> bool:
+        return self._start_minimized and self._minimize_to_tray
+
     def _load_history_initial(self):
         self._history_lines = self.store.read_history_lines()
         self._history_loaded = 0

@@ -12,8 +12,14 @@ def main():
 
     window = MainWindow()
     window.resize(1200, 700)
-    window.show()
-    QTimer.singleShot(0, window.apply_startup_visibility)
+    if window.should_start_hidden_to_tray():
+        window.apply_startup_visibility()
+    else:
+        if window.should_start_minimized():
+            window.showMinimized()
+        else:
+            window.show()
+        QTimer.singleShot(0, window.apply_startup_visibility)
 
     app.exec()
 
